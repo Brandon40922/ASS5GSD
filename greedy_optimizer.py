@@ -24,20 +24,25 @@ def maximize_deliveries(time_windows):
     
     Returns:
         list: List of delivery_ids that can be completed (maximum number possible)
-    
-    Example:
-        time_windows = [
-            {'delivery_id': 'A', 'start': 1, 'end': 3},
-            {'delivery_id': 'B', 'start': 2, 'end': 5},
-            {'delivery_id': 'C', 'start': 4, 'end': 7}
-        ]
-        maximize_deliveries(time_windows) returns ['A', 'C']
     """
-    # TODO: Implement greedy algorithm for activity selection
-    # Hint: What greedy choice gives you the most room for future deliveries?
-    # Hint: Think about sorting by a specific attribute
-    
-    pass  # Delete this and write your code
+    # Greedy choice: always pick the delivery that ends earliest.
+    # This leaves the most room for future deliveries.
+
+    if not time_windows:
+        return []
+
+    # Sort by end time ascending
+    windows_sorted = sorted(time_windows, key=lambda d: d["end"])
+
+    selected_ids = []
+    current_end = float("-inf")
+
+    for d in windows_sorted:
+        if d["start"] >= current_end:
+            selected_ids.append(d["delivery_id"])
+            current_end = d["end"]
+
+    return selected_ids
 
 
 # ============================================================================
@@ -58,25 +63,61 @@ def optimize_truck_load(packages, weight_limit):
     
     Returns:
         dict: {
-            'total_priority': float (total priority value loaded),
-            'total_weight': float (total weight loaded),
-            'packages': list of dicts with 'package_id' and 'fraction' (how much of package taken)
+            'total_priority': float,
+            'total_weight': float,
+            'packages': list of dicts with 'package_id' and 'fraction'
         }
-    
-    Example:
-        packages = [
-            {'package_id': 'A', 'weight': 10, 'priority': 60},
-            {'package_id': 'B', 'weight': 20, 'priority': 100},
-            {'package_id': 'C', 'weight': 30, 'priority': 120}
-        ]
-        weight_limit = 50
-        optimize_truck_load(packages, 50) returns packages A (full), B (full), C (partial)
     """
-    # TODO: Implement greedy algorithm for fractional knapsack
-    # Hint: What ratio determines which packages are most valuable per pound?
-    # Hint: You can take fractions - if you have 5 lbs capacity left and a 10 lb package, take 0.5 of it
-    
-    pass  # Delete this and write your code
+    if not packages or weight_limit <= 0:
+        return {"total_priority": 0.0, "total_weight": 0.0, "packages": []}
+
+    # Sort by priority-to-weight ratio descending (value density)
+    def ratio(p):
+        # Avoid division by zero; if weight is 0 and priority > 0, treat as "infinite"
+        if p["weight"] == 0:
+            return float("inf") if p["priority"] > 0 else 0.0
+        return p["priority"] / p["weight"]
+
+    packages_sorted = sorted(packages, key=ratio, reverse=True)
+
+    remaining = float(weight_limit)
+    total_priority = 0.0
+    total_weight = 0.0
+    taken = []
+
+    for p in packages_sorted:
+        if remaining <= 0:
+            break
+
+        w = float(p["weight"])
+        v = float(p["priority"])
+
+        if w <= 0:
+            # If it has no weight, take it fully (if it has positive value)
+            if v > 0:
+                taken.append({"package_id": p["package_id"], "fraction": 1.0})
+                total_priority += v
+            continue
+
+        if w <= remaining:
+            # Take the whole package
+            taken.append({"package_id": p["package_id"], "fraction": 1.0})
+            remaining -= w
+            total_weight += w
+            total_priority += v
+        else:
+            # Take a fraction to fill the remaining capacity
+            frac = remaining / w
+            taken.append({"package_id": p["package_id"], "fraction": frac})
+            total_weight += remaining
+            total_priority += v * frac
+            remaining = 0.0
+
+    return {
+        "total_priority": total_priority,
+        "total_weight": total_weight,
+        "packages": taken
+    }
 
 
 # ============================================================================
@@ -96,23 +137,38 @@ def minimize_drivers(deliveries):
     
     Returns:
         dict: {
-            'num_drivers': int (minimum drivers needed),
+            'num_drivers': int,
             'assignments': list of lists (each sublist is one driver's deliveries)
         }
-    
-    Example:
-        deliveries = [
-            {'delivery_id': 'A', 'start': 1, 'end': 3},
-            {'delivery_id': 'B', 'start': 2, 'end': 4},
-            {'delivery_id': 'C', 'start': 5, 'end': 7}
-        ]
-        minimize_drivers(deliveries) returns 2 drivers: [[A, C], [B]]
     """
-    # TODO: Implement greedy algorithm for interval scheduling
-    # Hint: How do you know if a delivery overlaps with another?
-    # Hint: Can you assign a delivery to an existing driver, or do you need a new one?
-    
-    pass  # Delete this and write your code
+    if not deliveries:
+        return {"num_drivers": 0, "assignments": []}
+
+    # Sort deliveries by start time (then end time to be consistent)
+    jobs = sorted(deliveries, key=lambda d: (d["start"], d["end"]))
+
+    # We'll store assignments as lists of delivery_ids per driver
+    assignments = []
+    # Track the time each driver becomes available (end time of last job)
+    driver_end_times = []
+
+    for job in jobs:
+        placed = False
+
+        for i in range(len(assignments)):
+            # If this driver is free before the job starts, assign it
+            if job["start"] >= driver_end_times[i]:
+                assignments[i].append(job["delivery_id"])
+                driver_end_times[i] = job["end"]
+                placed = True
+                break
+
+        if not placed:
+            # Need a new driver
+            assignments.append([job["delivery_id"]])
+            driver_end_times.append(job["end"])
+
+    return {"num_drivers": len(assignments), "assignments": assignments}
 
 
 # ============================================================================
@@ -297,9 +353,9 @@ if __name__ == "__main__":
     
     # Uncomment these as you complete each part:
     
-    # test_package_prioritization()
-    # test_truck_loading()
-    # test_driver_assignment()
-    # benchmark_scenarios()
+    test_package_prioritization()
+    test_truck_loading()
+    test_driver_assignment()
+    benchmark_scenarios()
     
     print("\n⚠ Uncomment the test functions in the main block to run tests!")
